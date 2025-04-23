@@ -27,7 +27,7 @@ if workout not in CRITERIA:
 
 window_name = "Workout Form Analysis - " + workout
 video_path = "side-squat2.mp4"
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(video_path)
 
 # Set up video recording using properties from the webcam.
 frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
