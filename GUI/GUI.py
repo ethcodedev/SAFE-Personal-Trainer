@@ -199,7 +199,6 @@ class WorkoutApp:
         self.pause_btn.grid(row=0, column=0, padx=10)
 
         StyledButton(control_frame, text="End Workout", command=self.end_workout).grid(row=0, column=1, padx=10)
-        StyledButton(control_frame, text="Start New Workout", command=self.new_workout_screen).grid(row=0, column=2, padx=10)
 
         self.paused = False
         self.update_video()
