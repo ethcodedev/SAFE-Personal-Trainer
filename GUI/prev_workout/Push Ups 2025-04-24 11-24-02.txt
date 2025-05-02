@@ -1,5 +1,0 @@
-Workout: Push Ups
-Name: Push Ups 2025-04-24 11-24-02
-Duration: 10s
-Reps: 12
-Heart Rate: 82 bpm

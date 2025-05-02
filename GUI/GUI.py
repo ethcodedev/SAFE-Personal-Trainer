@@ -1,19 +1,23 @@
+import shutil
 import tkinter as tk
 from tkinter import ttk, messagebox
 import time
 import threading
 import os
 from datetime import datetime
+import cv2
+from PIL import Image, ImageTk
 from webcam import WebcamHandler
-from tkVideoPlayer import TkinterVideo
 
 
 # Mock data
 def get_rep_count():
     return 12
 
+
 def get_heart_rate():
     return 82
+
 
 PRIMARY_BG = "#1e1e1e"
 ACCENT_BG = "#2c3e50"
@@ -22,8 +26,10 @@ BUTTON_HOVER_BG = "#e74c3c"
 TEXT_COLOR = "#ecf0f1"
 ENTRY_BG = "#34495e"
 
+
 class StyledButton(ttk.Button):
     _style_count = 0
+
     def __init__(self, master=None, **kwargs):
         style = ttk.Style(master)
         style.theme_use("clam")
@@ -36,6 +42,7 @@ class StyledButton(ttk.Button):
                   foreground=[("pressed", TEXT_COLOR), ("active", TEXT_COLOR)])
         kwargs["style"] = style_name
         super().__init__(master, **kwargs)
+
 
 class StyledEntry(tk.Entry):
     def __init__(self, master=None, **kwargs):
@@ -52,6 +59,7 @@ class StyledEntry(tk.Entry):
         self.delete(0, tk.END)
         self.insert(0, text)
         self.configure(fg="#888888")
+        self.update_idletasks()
 
     def on_focus_in(self, event):
         if self.get() == self.default_text:
@@ -62,6 +70,7 @@ class StyledEntry(tk.Entry):
         if not self.get():
             self.insert(0, self.default_text)
             self.configure(fg="#888888")
+
 
 class WorkoutApp:
     def __init__(self, root):
@@ -88,7 +97,7 @@ class WorkoutApp:
         frame = tk.Frame(self.root, bg=PRIMARY_BG)
         frame.pack(expand=True, fill="both")
         StyledButton(frame, text="Start New Workout", command=self.new_workout_screen).pack(pady=20)
-        StyledButton(frame,  text="View Previous Workouts", command=self.view_previous_workouts).pack(pady=20)
+        StyledButton(frame, text="View Previous Workouts", command=self.view_previous_workouts).pack(pady=20)
 
     def view_previous_workouts(self):
         self.clear_screen()
@@ -113,35 +122,33 @@ class WorkoutApp:
             os.makedirs("prev_workout")
 
         folders = sorted(os.listdir("prev_workout"))
-        if not folders:
-            tk.Label(scrollable_frame, text="No workouts yet – go get those gains!",
-                     fg=TEXT_COLOR, bg=PRIMARY_BG, font=("Helvetica", 18)).pack(pady=20)
-        else:
-            for folder in reversed(folders):
-                folder_path = os.path.join("prev_workout", folder)
-                if os.path.isdir(folder_path):
-                    text_file = os.path.join(folder_path, "workout_data.txt")
-                    if os.path.exists(text_file):
-                        with open(text_file, "r") as f:
-                            content = f.read()
-                        tk.Label(scrollable_frame, text=content, fg=TEXT_COLOR, bg=PRIMARY_BG,
-                                 font=("Helvetica", 16), wraplength=800, justify="left").pack(pady=10, anchor="w")
+        for folder in reversed(folders):
+            folder_path = os.path.join("prev_workout", folder)
+            if os.path.isdir(folder_path):
+                text_file = os.path.join(folder_path, "workout_data.txt")
+                if os.path.exists(text_file):
+                    with open(text_file, "r") as f:
+                        content = f.read()
+                    tk.Label(scrollable_frame, text=content, fg=TEXT_COLOR, bg=PRIMARY_BG,
+                             font=("Helvetica", 16), wraplength=800, justify="left").pack(pady=(10, 0), anchor="w")
 
-                    # 🔽 Add video preview if any video file exists in the folder
-                    video_files = [f for f in os.listdir(folder_path) if f.lower().endswith(('.mp4', '.avi', '.mov'))]
-                    if video_files:
-                        video_path = os.path.join(folder_path, video_files[0])
-                        if os.path.exists(video_path):
-                            tk.Label(scrollable_frame, text="Video Preview:", fg=TEXT_COLOR, bg=PRIMARY_BG,
-                                     font=("Helvetica", 16)).pack(anchor="w", padx=20)
-                            player = TkinterVideo(scrollable_frame, scaled=True, pre_load=False)
-                            player.load(video_path)
-                            player.pack(padx=20, pady=10, anchor="w")
-                            player.play()
+                buttons_frame = tk.Frame(scrollable_frame, bg=PRIMARY_BG)
+                buttons_frame.pack(anchor="w", padx=40, pady=5)
+
+                for file in sorted(os.listdir(folder_path)):
+                    video_path = os.path.join(folder_path, file)
+
+                    if file.endswith("_raw_video.avi"):
+                        StyledButton(buttons_frame, text="Play RAW Video",
+                                     command=lambda p=video_path: self.play_video_ui(p)).pack(side="left", padx=10)
+                    elif file.endswith("_AI_video.avi"):
+                        StyledButton(buttons_frame, text="Play AI Video",
+                                     command=lambda p=video_path: self.play_video_ui(p)).pack(side="left", padx=10)
 
     def new_workout_screen(self):
         self.clear_screen()
-        tk.Label(self.root, text="Select Workout Type", fg=TEXT_COLOR, bg=PRIMARY_BG, font=("Helvetica", 24)).pack(pady=10)
+        tk.Label(self.root, text="Select Workout Type", fg=TEXT_COLOR, bg=PRIMARY_BG, font=("Helvetica", 24)).pack(
+            pady=10)
         workout_menu = ttk.Combobox(self.root, textvariable=self.workout_type,
                                     values=["Push Ups", "Sit Ups", "Squats", "Jumping Jacks"], font=("Helvetica", 18))
         workout_menu.pack(pady=10)
@@ -154,8 +161,10 @@ class WorkoutApp:
         time_frame = tk.Frame(self.root, bg=PRIMARY_BG)
         time_frame.pack(pady=5)
 
-        tk.Label(time_frame, text="Minutes", fg=TEXT_COLOR, bg=PRIMARY_BG, font=("Helvetica", 16)).grid(row=0, column=0, padx=10)
-        tk.Label(time_frame, text="Seconds", fg=TEXT_COLOR, bg=PRIMARY_BG, font=("Helvetica", 16)).grid(row=0, column=1, padx=10)
+        tk.Label(time_frame, text="Minutes", fg=TEXT_COLOR, bg=PRIMARY_BG, font=("Helvetica", 16)).grid(row=0, column=0,
+                                                                                                        padx=10)
+        tk.Label(time_frame, text="Seconds", fg=TEXT_COLOR, bg=PRIMARY_BG, font=("Helvetica", 16)).grid(row=0, column=1,
+                                                                                                        padx=10)
 
         tk.Spinbox(time_frame, from_=0, to=59, textvariable=self.minutes, font=("Helvetica", 18), width=5,
                    bg=ACCENT_BG, fg=TEXT_COLOR, insertbackground=TEXT_COLOR).grid(row=1, column=0, padx=10)
@@ -186,15 +195,10 @@ class WorkoutApp:
         self.time_remaining = tk.IntVar(value=self.minutes.get() * 60 + self.seconds.get())
         self.clear_screen()
 
-        # Generate temporary path for video recording
-        video_filename = f"{self.workout_type.get()}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.avi"
-        self.video_output_path = os.path.join("prev_workout", video_filename)
+        self.video_output_path = os.path.join("prev_workout", "temp_video.avi")
         self.webcam.start_recording(self.video_output_path)
 
         self.workout_running = True
-
-        self.root.grid_columnconfigure(0, weight=1)
-        self.root.grid_columnconfigure(1, weight=1)
 
         self.video_frame = tk.Label(self.root, bg=PRIMARY_BG)
         self.video_frame.grid(row=0, column=0, rowspan=5, sticky="nsew", padx=10, pady=10)
@@ -202,17 +206,19 @@ class WorkoutApp:
         self.right_frame = tk.Frame(self.root, bg=PRIMARY_BG)
         self.right_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
 
-        self.type_label = tk.Label(self.right_frame, text=f"Workout: {self.workout_type.get()}",
-                                   fg=TEXT_COLOR, bg=PRIMARY_BG, font=("Helvetica", 20))
+        self.type_label = tk.Label(self.right_frame, text=f"Workout: {self.workout_type.get()}", fg=TEXT_COLOR,
+                                   bg=PRIMARY_BG, font=("Helvetica", 20))
         self.type_label.pack(pady=10)
 
         self.time_label = tk.Label(self.right_frame, text="", fg=TEXT_COLOR, bg=PRIMARY_BG, font=("Helvetica", 20))
         self.time_label.pack(pady=10)
 
-        self.rep_label = tk.Label(self.right_frame, text="Reps: --", font=("Helvetica", 32), fg=TEXT_COLOR, bg=PRIMARY_BG)
+        self.rep_label = tk.Label(self.right_frame, text="Reps: --", font=("Helvetica", 32), fg=TEXT_COLOR,
+                                  bg=PRIMARY_BG)
         self.rep_label.pack(pady=40)
 
-        self.hr_label = tk.Label(self.right_frame, text="Heart Rate: -- bpm", font=("Helvetica", 24), fg=TEXT_COLOR, bg=PRIMARY_BG)
+        self.hr_label = tk.Label(self.right_frame, text="Heart Rate: -- bpm", font=("Helvetica", 24), fg=TEXT_COLOR,
+                                 bg=PRIMARY_BG)
         self.hr_label.pack(pady=20)
 
         self.progress_var = tk.DoubleVar()
@@ -237,9 +243,10 @@ class WorkoutApp:
         if not self.workout_running:
             return
         frame = self.webcam.get_frame()
-        if frame:
-            self.video_frame.imgtk = frame
-            self.video_frame.configure(image=frame)
+        if frame is not None:
+            img = ImageTk.PhotoImage(image=Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
+            self.video_frame.imgtk = img
+            self.video_frame.config(image=img)
         self.root.after(10, self.update_video)
 
     def update_workout_timer(self):
@@ -268,16 +275,8 @@ class WorkoutApp:
     def end_workout(self):
         self.workout_running = False
         self.webcam.stop_recording()
-
-        workout_name = f"{self.workout_type.get()} {datetime.now().strftime('%Y-%m-%d %H-%M-%S')}"
-        folder_path = os.path.join("prev_workout", workout_name)
-        os.makedirs(folder_path, exist_ok=True)
-
-        if hasattr(self, "video_output_path") and os.path.exists(self.video_output_path):
-            final_video_path = os.path.join(folder_path, os.path.basename(self.video_output_path))
-            os.rename(self.video_output_path, final_video_path)
-
         self.webcam.release()
+
         self.clear_screen()
 
         wrapper = tk.Frame(self.root, bg=PRIMARY_BG)
@@ -285,28 +284,135 @@ class WorkoutApp:
 
         tk.Label(wrapper, text="Name Your Workout", fg=TEXT_COLOR, bg=PRIMARY_BG, font=("Helvetica", 24)).pack(pady=20)
 
+        default_name = f"{self.workout_type.get()} {datetime.now().strftime('%Y-%m-%d %H-%M-%S')}"
         name_var = tk.StringVar()
         entry = StyledEntry(wrapper, textvariable=name_var)
-        entry.set_default(workout_name)
+        name_var.set(default_name)
+        entry.set_default(default_name)
         entry.pack(pady=10, ipadx=10, ipady=5, fill="x", expand=True)
+        entry.focus_set()
+        entry.update_idletasks()
+        entry.bind("<Return>", lambda event: save_and_exit())
 
         def save_and_exit():
-            name = name_var.get().strip() or workout_name
-            final_folder = os.path.join("prev_workout", name)
-            os.rename(folder_path, final_folder)
-            file_path = os.path.join(final_folder, "workout_data.txt")
-            with open(file_path, "w") as f:
-                f.write(
-                    f"Workout: {self.workout_type.get()}\n"
-                    f"Name: {name}\n"
-                    f"Duration: {self.minutes.get() * 60 + self.seconds.get()}s\n"
-                    f"Reps: {get_rep_count()}\n"
-                    f"Heart Rate: {get_heart_rate()} bpm\n"
-                )
-            messagebox.showinfo("Workout Saved", "Workout successfully saved.")
-            self.init_prompt()
+            name = name_var.get().strip() or default_name
+            folder_path = os.path.join("prev_workout", name)
+            os.makedirs(folder_path, exist_ok=True)
 
-        StyledButton(wrapper, text="Save Workout", command=save_and_exit).pack(pady=20)
+            final_video_path = os.path.join(folder_path, f"{name}_raw_video.avi")
+            shutil.move(self.video_output_path, final_video_path)
+
+            file_path = os.path.join(folder_path, "workout_data.txt")
+            workout_lines = [
+                f"Workout: {self.workout_type.get()}",
+                f"Name: {name}",
+                f"Duration: {self.minutes.get() * 60 + self.seconds.get()} seconds",
+                f"Reps: {get_rep_count()}",
+                f"Heart Rate: {get_heart_rate()} bpm"
+            ]
+            with open(file_path, "w") as f:
+                f.write("\n".join(workout_lines))
+
+            self.loading_screen(name, folder_path)
+
+    def loading_screen(self, name, folder_path):
+        self.clear_screen()
+
+        label = tk.Label(self.root, text="Processing your workout...", font=("Helvetica", 24), fg=TEXT_COLOR,
+                         bg=PRIMARY_BG)
+        label.pack(pady=20)
+
+        percent_label = tk.Label(self.root, text="0%", font=("Helvetica", 20), fg=TEXT_COLOR, bg=PRIMARY_BG)
+        percent_label.pack(pady=10)
+
+        spinner_canvas = tk.Canvas(self.root, width=100, height=100, bg=PRIMARY_BG, highlightthickness=0)
+        spinner_canvas.pack(pady=10)
+        arc = spinner_canvas.create_arc(10, 10, 90, 90, start=0, extent=90, fill=BUTTON_HOVER_BG, outline="")
+
+        self._stop_spinner = False
+        self._progress_complete = False
+
+        def animate_spinner():
+            angle = 0
+            while not self._stop_spinner:
+                spinner_canvas.itemconfig(arc, start=angle)
+                angle = (angle + 10) % 360
+                time.sleep(0.05)
+                spinner_canvas.update()
+
+        def update_percent():
+            threading.Thread(target=animate_spinner, daemon=True).start()
+            i = 1
+            while i <= 100:
+                percent_label.config(text=f"{i}%")
+                self.root.update()
+                if self._progress_complete:
+                    break
+                time.sleep(0.5)
+                i += 1
+
+        threading.Thread(target=update_percent, daemon=True).start()
+        threading.Thread(target=self.fake_model_inference, args=(name, folder_path), daemon=True).start()
+
+    def fake_model_inference(self, name, folder_path):
+        time.sleep(2)  # Simulated processing
+        processed_video_path = os.path.join(folder_path, f"{name}_AI_video.avi")
+        original = os.path.join(folder_path, f"{name}_raw_video.avi")
+        if os.path.exists(original):
+            shutil.copyfile(original, processed_video_path)
+            self._progress_complete = True
+            self._stop_spinner = True
+        self.root.after(0, lambda: self.play_video_ui(processed_video_path))
+
+    def play_video_ui(self, video_path):
+        self.clear_screen()
+
+        label = tk.Label(self.root, text="Watch Your Processed Workout", font=("Helvetica", 24), fg=TEXT_COLOR,
+                         bg=PRIMARY_BG)
+        label.pack(pady=10)
+
+        video_frame = tk.Label(self.root, bg=PRIMARY_BG)
+        video_frame.pack(expand=True)
+
+        cap = cv2.VideoCapture(video_path)
+        paused = [False]
+        ended = [False]
+
+        def toggle_pause():
+            paused[0] = not paused[0]
+
+        def restart_video():
+            cap.release()
+            self.play_video_ui(video_path)
+
+        # Play/Pause Button
+        play_pause_btn = StyledButton(self.root, text="⏯ Play / Pause", command=toggle_pause)
+        play_pause_btn.place(relx=0.5, rely=0.9, anchor="center")
+
+        def update():
+            if not paused[0] and not ended[0]:
+                ret, frame = cap.read()
+                if ret:
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    img = ImageTk.PhotoImage(Image.fromarray(frame))
+                    video_frame.imgtk = img
+                    video_frame.config(image=img)
+                else:
+                    ended[0] = True
+                    cap.release()
+                    play_pause_btn.destroy()
+
+                    # Show bottom buttons
+                    btn_frame = tk.Frame(self.root, bg=PRIMARY_BG)
+                    btn_frame.pack(pady=20)
+
+                    StyledButton(btn_frame, text="🔁 Watch Again", command=restart_video).pack(side="left", padx=10)
+                    StyledButton(btn_frame, text="🏠 Back to Home", command=self.init_prompt).pack(side="left", padx=10)
+                    return
+            video_frame.after(33, update)
+
+        update()
+
 
 if __name__ == "__main__":
     root = tk.Tk()
@@ -314,3 +420,4 @@ if __name__ == "__main__":
     root.columnconfigure(0, weight=1)
     app = WorkoutApp(root)
     root.mainloop()
+
